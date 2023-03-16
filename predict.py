@@ -3,15 +3,18 @@ from cog import BasePredictor, Input
 from transformers import LLaMAForCausalLM, LLaMATokenizer
 import torch
 
+from train import PROMPT_DICT
+PROMPT = PROMPT_DICT['prompt_no_input']
+
 CACHE_DIR = 'alpaca_out'
 
 class Predictor(BasePredictor):
     def setup(self):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.model = LLaMAForCausalLM.from_pretrained("weights/llama-7b", cache_dir=CACHE_DIR, local_files_only=True)
+        self.model = LLaMAForCausalLM.from_pretrained("alpaca_out", cache_dir=CACHE_DIR, local_files_only=True)
         self.model = self.model
         self.model.to(self.device)
-        self.tokenizer = LLaMATokenizer.from_pretrained("weights/tokenizer", cache_dir=CACHE_DIR, local_files_only=True)
+        self.tokenizer = LLaMATokenizer.from_pretrained("alpaca_out", cache_dir=CACHE_DIR, local_files_only=True)
 
     def predict(
         self,
@@ -41,7 +44,8 @@ class Predictor(BasePredictor):
             default=1
         )
         ) -> List[str]:
-        input = self.tokenizer(prompt, return_tensors="pt").input_ids.to(self.device)
+        format_prompt = PROMPT.format_map({'instruction': prompt})
+        input = self.tokenizer(format_prompt, return_tensors="pt").input_ids.to(self.device)
 
         outputs = self.model.generate(
             input,
@@ -53,5 +57,7 @@ class Predictor(BasePredictor):
             repetition_penalty=repetition_penalty
         )
         out = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        # removing prompt b/c it's returned with every input 
+        out = [val.split('Response:')[1] for val in out]
         return out
         
